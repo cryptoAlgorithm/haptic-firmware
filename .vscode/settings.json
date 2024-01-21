@@ -1,0 +1,16 @@
+{
+  "files.associations": {
+    "esp_netif.h": "c",
+    "wifi_handlers.h": "c",
+    "esp_event.h": "c",
+    "i2c.h": "c",
+    "wire.h": "c",
+    "drv8847.h": "c",
+    "esp_log.h": "c",
+    "server.h": "c",
+    "haptic.h": "c",
+    "stdint.h": "c",
+    "shift_register.h": "c",
+    "param.h": "c"
+  }
+}
