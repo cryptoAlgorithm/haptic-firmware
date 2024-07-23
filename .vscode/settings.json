@@ -11,6 +11,16 @@
     "haptic.h": "c",
     "stdint.h": "c",
     "shift_register.h": "c",
-    "param.h": "c"
+    "param.h": "c",
+    "array": "c",
+    "deque": "c",
+    "string": "c",
+    "unordered_map": "c",
+    "unordered_set": "c",
+    "vector": "c",
+    "string_view": "c",
+    "initializer_list": "c",
+    "spi.h": "c",
+    "pins.h": "c"
   }
 }

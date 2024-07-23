@@ -4,9 +4,13 @@
 
 #include "ws_handler.h"
 
-static const char *TAG = "SRV";
+#define TAG "SRV"
 
 #define MAX_OPEN_SOCKETS 10
+
+// Increase log level
+#undef LOG_LOCAL_LEVEL
+#define LOG_LOCAL_LEVEL 5
 
 // HTTP GET Handler
 static esp_err_t root_get_handler(httpd_req_t *req) {
