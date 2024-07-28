@@ -12,11 +12,20 @@
 #undef LOG_LOCAL_LEVEL
 #define LOG_LOCAL_LEVEL 5
 
+static const char * root_html = 
+"<html><head>"
+"<title>HapticDriver</title>"
+"</head>"
+"<body>"
+"<h1>HapticDriver v2</h1>"
+"<p>I'm alive!</p>"
+"</body></html>";
+
 // HTTP GET Handler
 static esp_err_t root_get_handler(httpd_req_t *req) {
   ESP_LOGI(TAG, "Serve root");
   httpd_resp_set_type(req, "text/html");
-  httpd_resp_sendstr(req, "<html><head><title>HapticDriver</title></head><body><h1>Rarara</h1></body></html>");
+  httpd_resp_sendstr(req, root_html);
 
   return ESP_OK;
 }
@@ -41,7 +50,7 @@ static esp_err_t ws_handler(httpd_req_t * req) {
     ESP_LOGE(TAG, "httpd_ws_recv_frame failed to get frame len with %d", ret);
     return ret;
   }
-  ESP_LOGI(TAG, "frame len is %d", pkt.len);
+  ESP_LOGV(TAG, "rx WS frame, len: %d", pkt.len);
   return ws_handle_frame(req, &pkt);
 }
 

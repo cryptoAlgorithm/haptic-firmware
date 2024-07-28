@@ -12,9 +12,9 @@
 // Default output config which keeps most things at their default
 max_ch_config_t max_ch_cfg_default = {
   // Full scale current approx 937mA
-  .hold = 64, // Approx 50% full scale
-  .hit = 126, // 100% full scale
-  .hit_t = 250 // 250*40 / 25000 (f_chop)
+  .hit_t = 60, // 250*40 / 25000 (f_chop)
+  .hit = 64, // ~50% full scale
+  .hold = 16 // Approx 12% full scale
 };
 
 max_config_t max_driver_a = {
@@ -90,7 +90,10 @@ static uint32_t max_reg(max_config_t * dev, uint8_t rw, uint8_t addr, uint8_t ms
 static uint32_t max_ch_config(max_config_t * dev, uint8_t ch_n, max_ch_config_t * cfg) {
   _Static_assert(sizeof(max_ch_config_t) == 4, "Incorrectly sized config, ensure packed and correct number of bits");
 
-  return max_reg(dev, 1, MAX22200_REG_CF_CH0 + ch_n, 0, *((uint32_t *) cfg));
+  uint32_t cfg32 = *((uint32_t *) cfg);
+  ESP_LOGI(TAG, "config: %lu", cfg32);
+
+  return max_reg(dev, 1, MAX22200_REG_CF_CH0 + ch_n, 0, cfg32);
 }
 
 /**
@@ -166,4 +169,17 @@ void max_init() {
   ESP_LOGI(TAG, "init drivers...");
   ESP_ERROR_CHECK(max_dev_init(&max_driver_a)); // Pull down ESP error check here instead of raising status code to outer scope
   ESP_ERROR_CHECK(max_dev_init(&max_driver_b)); // to hopefully provide more relevant abort messages if any
+}
+
+void max_set_ch_state(max_config_t * dev, uint8_t ch, uint8_t st) {
+  // First check if channel already has desired state, don't waste writes
+  uint8_t msk = 1 << ch;
+  if ((dev->channel_state & msk) == (st ? msk : 0)) {
+    ESP_LOGD(TAG, "ignoring update to cur state: ch: %u, st: %u", ch, st);
+    return;
+  }
+  dev->channel_state ^= msk;
+  // Write to MSB of status reg
+  uint32_t status = max_reg(dev, 1, MAX22200_REG_STATUS, 1, dev->channel_state);
+  ESP_LOGI(TAG, "update ch state: %u, status[7:0]: %lu", dev->channel_state, status);
 }

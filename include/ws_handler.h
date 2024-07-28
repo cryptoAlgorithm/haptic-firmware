@@ -27,6 +27,7 @@ static esp_err_t ws_handle_frame(httpd_req_t * req, httpd_ws_frame_t * pkt) {
   case HTTPD_WS_TYPE_TEXT:
     switch (pkt->payload[0]) {
     case '1':
+      ESP_LOGI("WS", "pong");
       return ws_send_text(req, "1");
     }
   }
