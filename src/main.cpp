@@ -7,15 +7,16 @@
 #include "driver/i2s.h"
 
 #include "nvs_flash.h"
-// #include "esp_wifi.h"
-// #include "esp_netif.h"
+#include "esp_wifi.h"
+#include "esp_netif.h"
 
 #include "pins.h"
 
-// #include "dns_server.h"
-// #include "wifi_handlers.h"
-// #include "server.h"
+#include "dns_server.h"
+#include "wifi_handlers.h"
+#include "server.h"
 
+#include "battery.h"
 #include "MAX22200.h"
 #include "haptic.h"
 
@@ -32,7 +33,13 @@ void setup() {
 
 	esp_log_level_set("*", ESP_LOG_VERBOSE);
 
-  delay(2000); // Give some time for virtual serial to connect
+  battery_init();
+
+  // For debugging - check if powered via usb only and add short delay
+  if (battery_getmv() < 5100) { // USB shouldn't exceed this
+    delay(2000); // Give some time for virtual serial to connect
+    ESP_LOGD(TAG, "vBatt low, likely USB power only");
+  }
 
   ESP_LOGI(TAG, "Begin!");
 
@@ -42,8 +49,6 @@ void setup() {
 
   // Init SPI to drivers
   max_init();
-  max_set_ch_state(&max_driver_a, 2, 1);
-  max_set_ch_state(&max_driver_b, 1, 1);
 
   // Initialize networking stack
   ESP_ERROR_CHECK(esp_netif_init());
@@ -55,39 +60,45 @@ void setup() {
   ESP_ERROR_CHECK(nvs_flash_init());
 
   // Initialize Wi-Fi including netif with default config
-  // esp_netif_create_default_wifi_ap();
+  esp_netif_create_default_wifi_ap();
 
   // Initialise ESP32 in SoftAP mode
-  // wifi_init_softap();
+  wifi_init_softap();
 
   // Start the server for the first time
-  // start_webserver();
+  start_webserver();
 
   // Start the DNS server that will redirect all queries to the softAP IP
   // start_dns_server();
 
+  // Test all outputs
+  for (uint8_t ch = 0; ch < haptic_num_outputs; ++ch) {
+    haptic_set_state(ch, 1, 1);
+    if (ch > 0) haptic_set_state(ch-1, 0, 1);
+    delay(50);
+  }
+  haptic_set_state(haptic_num_outputs-1, 0, 1);
+
   start_haptic_task();
 }
 
-static uint8_t ret, cnt = 0;
-static float temp = 0;
-static char status_msg[12];
-
 void loop() {
+  static uint8_t ret, cnt = 0, ch = 0;
+  static float temp = 0;
+  static char status_msg[64];
+  static uint32_t vBatt;
+
   if ((ret = temp_sensor_read_celsius(&temp)) != ESP_OK) {
     ESP_LOGE(TAG, "Temp read error: %d", ret);
   }
-  size_t size = snprintf(status_msg, sizeof(status_msg), "temp=%.1f", temp);
-  /*httpd_ws_frame_t pkt = {
+  vBatt = battery_getmv();
+  size_t size = snprintf(status_msg, sizeof(status_msg), "2,%.1f,%lu", temp, vBatt);
+  httpd_ws_frame_t pkt = {
     .type = HTTPD_WS_TYPE_TEXT,
     .payload = (uint8_t *) status_msg,
-    .len = size+1 // snprintf does not include null terminator in length
+    .len = size // snprintf does not include null terminator in length
   };
-  ws_frame_send_all(&pkt);*/
+  ws_frame_send_all(&pkt);
   ESP_LOGI(TAG, "temp=%.1f", temp);
-  // ++cnt;
-  cnt ^= 1;
-  max_set_ch_state(&max_driver_a, 2, cnt);
-  max_set_ch_state(&max_driver_b, 1, cnt);
   delay(1000);
 }

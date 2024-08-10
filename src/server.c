@@ -30,7 +30,7 @@ static esp_err_t root_get_handler(httpd_req_t *req) {
   return ESP_OK;
 }
 
-static uint8_t recv_buf[12];
+static uint8_t recv_buf[256];
 
 static esp_err_t ws_handler(httpd_req_t * req) {
   esp_err_t ret;
@@ -63,7 +63,8 @@ static const httpd_uri_t ws_server = {
   .uri = "/ws",
   .is_websocket = true,
   .method       = HTTP_GET,
-  .handler = ws_handler
+  .handler = ws_handler,
+  .handle_ws_control_frames = true
 };
 
 // HTTP Error (404) Handler - Redirects all requests to the root page

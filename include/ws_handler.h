@@ -25,11 +25,28 @@ static esp_err_t ws_handle_frame(httpd_req_t * req, httpd_ws_frame_t * pkt) {
     }
     break;
   case HTTPD_WS_TYPE_TEXT:
-    switch (pkt->payload[0]) {
+    /*switch (pkt->payload[0]) {
     case '1':
       ESP_LOGI("WS", "pong");
       return ws_send_text(req, "1");
-    }
+    }*/
+    break;
+  // Control frame handling - we have to do this ourselves in order to 
+  case HTTPD_WS_TYPE_PING:
+    // echo it back as a pong packet
+    pkt->type = HTTPD_WS_TYPE_PONG;
+    return httpd_ws_send_frame(req, pkt);
+  case HTTPD_WS_TYPE_CLOSE: {
+    // TODO: See if we have any more clients, only stop haptic feedback when none remaining
+    haptic_stop();
+    // Respond with close frame accordingly
+    httpd_ws_frame_t frame = {
+      .len = 0,
+      .payload = NULL,
+      .type = HTTPD_WS_TYPE_CLOSE
+    };
+    return httpd_ws_send_frame(req, &frame);
+  }
   }
   /*if (!strncmp((char *) cmp_buf, "1", pkt->len)) {
     return ws_send_text(req, "1");

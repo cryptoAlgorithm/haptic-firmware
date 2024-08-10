@@ -103,10 +103,24 @@ typedef struct {
    * Do not modify this directly - use `max_update_ch_state(...)` instead
    */
   uint8_t channel_state;
+  uint8_t dirty;
 } max_config_t;
 
 extern max_config_t max_driver_a;
 extern max_config_t max_driver_b;
 
+#ifdef __cplusplus
+extern "C" { // Make api available to both c and cpp sources
+#endif
 void max_init();
-void max_set_ch_state(max_config_t *, uint8_t ch, uint8_t st);
+void max_set_ch_state(max_config_t *, uint8_t ch, uint8_t st, uint8_t update);
+void max_push_ch_state(max_config_t *);
+/**
+ * Get cached state of a channel
+ * 
+ * This might not be the actual state in the driver's registers if dirty != 0
+ */
+uint8_t max_get_ch_state(max_config_t * dev, uint8_t ch);
+#ifdef __cplusplus
+}
+#endif

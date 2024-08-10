@@ -21,6 +21,9 @@
     "string_view": "c",
     "initializer_list": "c",
     "spi.h": "c",
-    "pins.h": "c"
+    "pins.h": "c",
+    "adc.h": "c",
+    "battery.h": "c",
+    "ws_handler.h": "c"
   }
 }

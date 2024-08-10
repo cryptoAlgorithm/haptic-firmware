@@ -10,39 +10,46 @@
 #undef LOG_LOCAL_LEVEL
 #define LOG_LOCAL_LEVEL 5
 
-#define IN1_1 12
-#define IN1_2 13
-#define IN1_3 15
-#define IN1_4 14
-#define IN2_1 20
-#define IN2_2 21
-#define IN2_3 23
-#define IN2_4 22
-#define IN3_1 0
-#define IN3_2 3
-#define IN3_3 4
-#define IN3_4 5
-
 static const char * TAG = "haptic";
 
-static const haptic_output outputs[] = {{
-  .inA = IN1_1,
-  .inB = IN1_2
+#define ON_CYCLES 6 // approx 6*10 = 60ms
+
+static const haptic_output outputs[] = { /* row 0 */ {
+  .driver = &max_driver_b,
+  .ch = 5
 }, {
-  .inA = IN1_3,
-  .inB = IN1_4
+  .driver = &max_driver_b,
+  .ch = 7
 }, {
-  .inA = IN2_1,
-  .inB = IN2_2
+  .driver = &max_driver_a,
+  .ch = 0
+}, /* row 1 */ {
+  .driver = &max_driver_b,
+  .ch = 2
 }, {
-  .inA = IN2_3,
-  .inB = IN2_4
+  .driver = &max_driver_a,
+  .ch = 3
 }, {
-  .inA = IN3_1,
-  .inB = IN3_2
+  .driver = &max_driver_a,
+  .ch = 6
+}, /* row 2 */ {
+  .driver = &max_driver_b,
+  .ch = 1
 }, {
-  .inA = IN3_3,
-  .inB = IN3_4
+  .driver = &max_driver_b,
+  .ch = 6
+}, {
+  .driver = &max_driver_a,
+  .ch = 5
+}, /* row 3 */ {
+  .driver = &max_driver_b,
+  .ch = 4
+}, {
+  .driver = &max_driver_a,
+  .ch = 1
+}, {
+  .driver = &max_driver_a,
+  .ch = 4
 }};
 
 #define NUM_OUTPUTS (sizeof(outputs)/sizeof(haptic_output))
@@ -51,10 +58,10 @@ const uint8_t haptic_num_outputs = NUM_OUTPUTS;
 /**
  * Feedback frequency per output.
  * 
- * Each increment corresponds to an additional ~20ms of delay between actuations.
+ * Each increment corresponds to an additional ~10ms of delay between actuations.
  * Set to 0 to disable.
  */
-static uint8_t output_delays[NUM_OUTPUTS] = { 100, 50 };
+static uint8_t output_delays[NUM_OUTPUTS] = { 0 };
 
 /**
  * Counters of each state's delay
@@ -65,13 +72,48 @@ static uint8_t output_delays[NUM_OUTPUTS] = { 100, 50 };
 static uint8_t output_counters[NUM_OUTPUTS] = { 0 };
 
 void haptic_update_delays(uint8_t * delays) {
+  for (uint8_t i = 0; i < NUM_OUTPUTS; ++i) {
+    if (delays[i] <= ON_CYCLES && delays[i] != 0) delays[i] = ON_CYCLES+1; // Enforce minimum delay between cycles if input malformed
+  }
   memcpy(output_delays, delays, NUM_OUTPUTS);
   // ESP_LOGI(TAG, "Updated output delays");
   ESP_LOG_BUFFER_HEX(TAG, output_delays, NUM_OUTPUTS);
 }
 
+void haptic_stop() {
+  ESP_LOGI(TAG, "stopping all output chs");
+  memset(output_delays, 0, NUM_OUTPUTS);
+}
+
+static uint8_t haptic_get_state(uint8_t out_n) {
+  if (out_n >= haptic_num_outputs) { // out of range
+    ESP_LOGE(TAG, "supplied out of range haptic output: %u", out_n);
+    return 0;
+  }
+  const haptic_output * out = &outputs[out_n];
+  return max_get_ch_state(out->driver, out->ch);
+}
+
+static void haptic_push_state() {
+  // attempt push for both drivers because we don't know which ones are actually dirty - outputs span both
+  max_push_ch_state(&max_driver_a);
+  max_push_ch_state(&max_driver_b);
+}
+
+void haptic_set_state(uint8_t out_n, uint8_t st, uint8_t update) {
+  if (out_n >= haptic_num_outputs) { // out of range
+    ESP_LOGE(TAG, "supplied out of range haptic output: %u", out_n);
+    return;
+  }
+  const haptic_output * out = &outputs[out_n];
+  max_set_ch_state(out->driver, out->ch, st, 0);
+  if (update) {
+    haptic_push_state();
+  }
+}
+
 static void haptic_task(void * param) {
-  uint8_t i, st, dirty = 0;
+  uint8_t i, st;
   for (;;) {
     for (i = 0; i < NUM_OUTPUTS; ++i) {
       if (output_counters[i] == 0) {
@@ -80,24 +122,22 @@ static void haptic_task(void * param) {
       }
       // Decrement each counter; Flip output whenever it reaches 0
       if (--output_counters[i] == 0) {
-        // st = shift_get_output(outputs[i].inA);
+        st = haptic_get_state(i);
         if (st) {
+          haptic_set_state(i, 0, 0);
           // shift_set_output(outputs[i].inA, 0);
-          output_counters[i] = output_delays[i]; // Switch on again after delay
+          output_counters[i] = output_delays[i] == 0 ? 0 : (output_delays[i]-ON_CYCLES); // Switch on again after delay
           // ESP_LOGD(TAG, "Output %d off", i);
         } else {
+          haptic_set_state(i, 1, 0);
           // shift_set_output(outputs[i].inA, 1);
-          output_counters[i] = 5; // Start counting down and disable output after 100ms
+          output_counters[i] = ON_CYCLES; // Start counting down and disable output after 100ms
           // ESP_LOGD(TAG, "Output %d on", i);
         }
-        dirty = 1;
       }
     }
-    if (dirty) {
-      // shift_update();
-      dirty = 0;
-    }
-    vTaskDelay(pdMS_TO_TICKS(20));
+    haptic_push_state();
+    vTaskDelay(pdMS_TO_TICKS(10));
   }
   vTaskDelete(NULL);
   // if (cnt == 10) {

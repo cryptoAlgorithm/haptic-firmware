@@ -12,9 +12,9 @@
 // Default output config which keeps most things at their default
 max_ch_config_t max_ch_cfg_default = {
   // Full scale current approx 937mA
-  .hit_t = 60, // 250*40 / 25000 (f_chop)
-  .hit = 64, // ~50% full scale
-  .hold = 16 // Approx 12% full scale
+  .hit_t = 25, // 250*40 / 25000 (f_chop)
+  .hit = 100, // ~50% full scale
+  .hold = 12 // Approx 12% full scale
 };
 
 max_config_t max_driver_a = {
@@ -91,7 +91,7 @@ static uint32_t max_ch_config(max_config_t * dev, uint8_t ch_n, max_ch_config_t 
   _Static_assert(sizeof(max_ch_config_t) == 4, "Incorrectly sized config, ensure packed and correct number of bits");
 
   uint32_t cfg32 = *((uint32_t *) cfg);
-  ESP_LOGI(TAG, "config: %lu", cfg32);
+  ESP_LOGV(TAG, "set config n: %u, raw: %lu", ch_n, cfg32);
 
   return max_reg(dev, 1, MAX22200_REG_CF_CH0 + ch_n, 0, cfg32);
 }
@@ -140,6 +140,7 @@ static esp_err_t max_dev_init(max_config_t * dev) {
     return ESP_FAIL;
   }
 
+  dev->dirty = 0;
   ESP_LOGI(TAG, "dev init success, final status: %lu", status);
   return ESP_OK;
 }
@@ -171,7 +172,7 @@ void max_init() {
   ESP_ERROR_CHECK(max_dev_init(&max_driver_b)); // to hopefully provide more relevant abort messages if any
 }
 
-void max_set_ch_state(max_config_t * dev, uint8_t ch, uint8_t st) {
+void max_set_ch_state(max_config_t * dev, uint8_t ch, uint8_t st, uint8_t update) {
   // First check if channel already has desired state, don't waste writes
   uint8_t msk = 1 << ch;
   if ((dev->channel_state & msk) == (st ? msk : 0)) {
@@ -179,7 +180,23 @@ void max_set_ch_state(max_config_t * dev, uint8_t ch, uint8_t st) {
     return;
   }
   dev->channel_state ^= msk;
+  dev->dirty = 1;
+  if (update) {
+    max_push_ch_state(dev);
+  }
+}
+
+uint8_t max_get_ch_state(max_config_t * dev, uint8_t ch) {
+  return (dev->channel_state & (1 << ch)) != 0;
+}
+
+void max_push_ch_state(max_config_t * dev) {
+  if (!dev->dirty) {
+    // ESP_LOGD(TAG, "not updating, state not dirty");
+    return;
+  }
   // Write to MSB of status reg
-  uint32_t status = max_reg(dev, 1, MAX22200_REG_STATUS, 1, dev->channel_state);
-  ESP_LOGI(TAG, "update ch state: %u, status[7:0]: %lu", dev->channel_state, status);
+  uint32_t status = max_reg(dev, 1, MAX22200_REG_STATUS, 1, /*st ? 0xff : 0);*/ dev->channel_state);
+  // ESP_LOGI(TAG, "update ch state: %u, status[7:0]: %lu", dev->channel_state, status);
+  dev->dirty = 0;
 }
